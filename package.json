@@ -1,0 +1,170 @@
+{
+  "name": "agent-sessions-sync",
+  "displayName": "Agent Sessions Sync",
+  "description": "Keep your AI agent sessions (Claude Code, Codex, Cursor) synchronized across all of your computers via your own private GitHub repository.",
+  "version": "0.1.0",
+  "publisher": "Gregor-von-Vitek",
+  "license": "MIT",
+  "icon": "media/icon.png",
+  "galleryBanner": {
+    "color": "#0F766E",
+    "theme": "dark"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Gregor-von-Vitek/agent-sessions-sync"
+  },
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "claude",
+    "claude code",
+    "sessions",
+    "history",
+    "sync",
+    "ai",
+    "agent"
+  ],
+  "extensionKind": [
+    "ui",
+    "workspace"
+  ],
+  "capabilities": {
+    "virtualWorkspaces": true,
+    "untrustedWorkspaces": {
+      "supported": true
+    }
+  },
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "agentSessionsSync.setup",
+        "title": "Set Up / Change Repository",
+        "category": "Agent Sessions Sync"
+      },
+      {
+        "command": "agentSessionsSync.syncNow",
+        "title": "Sync Now",
+        "category": "Agent Sessions Sync"
+      },
+      {
+        "command": "agentSessionsSync.resolveConflicts",
+        "title": "Resolve Conflicts",
+        "category": "Agent Sessions Sync"
+      },
+      {
+        "command": "agentSessionsSync.openRepository",
+        "title": "Open Repository on GitHub",
+        "category": "Agent Sessions Sync"
+      },
+      {
+        "command": "agentSessionsSync.showLog",
+        "title": "Show Log",
+        "category": "Agent Sessions Sync"
+      },
+      {
+        "command": "agentSessionsSync.openMenu",
+        "title": "Open Sync Menu",
+        "category": "Agent Sessions Sync"
+      }
+    ],
+    "configuration": {
+      "title": "Agent Sessions Sync",
+      "properties": {
+        "agentSessionsSync.agents.claude.enabled": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Synchronize **Claude Code** sessions."
+        },
+        "agentSessionsSync.agents.claude.path": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "markdownDescription": "Local Claude Code sessions directory. Leave empty for the default `~/.claude/projects`. Supports `~`."
+        },
+        "agentSessionsSync.agents.codex.enabled": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Synchronize **Codex** sessions."
+        },
+        "agentSessionsSync.agents.codex.path": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "markdownDescription": "Local Codex sessions directory. Leave empty for the default `~/.codex/sessions`. Supports `~`."
+        },
+        "agentSessionsSync.agents.cursor.enabled": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Synchronize **Cursor** sessions."
+        },
+        "agentSessionsSync.agents.cursor.path": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "markdownDescription": "Local Cursor sessions directory. Leave empty for the default `~/.cursor/chats`. Supports `~`."
+        },
+        "agentSessionsSync.autoSync": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically synchronize sessions on startup, on file changes and periodically. When disabled, use the 'Sync Now' command."
+        },
+        "agentSessionsSync.pollIntervalMinutes": {
+          "type": "number",
+          "default": 5,
+          "minimum": 1,
+          "maximum": 720,
+          "description": "How often (in minutes) to check the remote repository for changes made on other devices."
+        },
+        "agentSessionsSync.debounceSeconds": {
+          "type": "number",
+          "default": 30,
+          "minimum": 1,
+          "maximum": 600,
+          "description": "How long to wait after a local session file change before syncing (debounce). Sessions are written continuously while an agent runs, so keep this generous."
+        },
+        "agentSessionsSync.freshMinutes": {
+          "type": "number",
+          "default": 5,
+          "minimum": 0,
+          "maximum": 120,
+          "description": "Session files modified within this many minutes are considered actively in use and are skipped in both directions until they settle. 0 disables the check."
+        },
+        "agentSessionsSync.maxFileSizeMB": {
+          "type": "number",
+          "default": 50,
+          "minimum": 1,
+          "maximum": 95,
+          "description": "Session files larger than this are not synchronized (GitHub blobs are limited to 100 MB)."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "pretest:integration": "npm run build && tsc -p tsconfig.integration.json",
+    "test:integration": "node out-test/test/integration/runTest.js",
+    "vscode:prepublish": "node esbuild.mjs --production",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/vscode": "^1.90.0",
+    "@vscode/test-electron": "^2.4.1",
+    "@vscode/vsce": "^3.1.0",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.5.4",
+    "vitest": "^2.1.9"
+  }
+}
