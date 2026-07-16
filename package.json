@@ -61,6 +61,11 @@
         "category": "Agent Sessions Sync"
       },
       {
+        "command": "agentSessionsSync.mapClaudeProject",
+        "title": "Map Claude Project Folder",
+        "category": "Agent Sessions Sync"
+      },
+      {
         "command": "agentSessionsSync.openRepository",
         "title": "Open Repository on GitHub",
         "category": "Agent Sessions Sync"
@@ -89,6 +94,15 @@
           "default": "",
           "scope": "machine",
           "markdownDescription": "Local Claude Code sessions directory. Leave empty for the default `~/.claude/projects`. Supports `~`."
+        },
+        "agentSessionsSync.agents.claude.projectPaths": {
+          "type": "object",
+          "default": {},
+          "scope": "machine",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "markdownDescription": "Map Claude Code project folders in the repository to the project's directory on **this** machine, so sessions synced from machines with different project paths show up in `claude --resume`. Keys are folder names under `claude/` in the repository (another machine's encoded project path), values are local project directories (supports `~`). Prefer the **Agent Sessions Sync: Map Claude Project Folder** command — it also moves already-downloaded sessions. A mapping stays inactive while a local sessions folder with the repository name still exists."
         },
         "agentSessionsSync.agents.codex.enabled": {
           "type": "boolean",

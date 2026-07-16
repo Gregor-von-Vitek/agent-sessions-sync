@@ -3,11 +3,24 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { gitBlobSha, scanAgents } from '../../src/sync/scanner';
-import { Agent } from '../../src/sync/types';
-import { describeUnit, expandUserPath, isValidRepoPath, repoPathToLocal } from '../../src/util/paths';
+import { Agent, FolderMap } from '../../src/sync/types';
+import {
+  buildFolderMap,
+  claudeProjectSlug,
+  describeUnit,
+  expandUserPath,
+  isValidRepoPath,
+  repoPathToLocal,
+  repoPathToLocalRel,
+} from '../../src/util/paths';
 
-function agent(id: string, repoDir: string, localPath: string): Agent {
-  return { id, label: id, repoDir, localPath, unitDepth: 3 };
+function agent(id: string, repoDir: string, localPath: string, folderMap?: FolderMap): Agent {
+  return { id, label: id, repoDir, localPath, unitDepth: 3, folderMap };
+}
+
+function folderMap(pairs: Record<string, string>): FolderMap {
+  const toLocal = new Map(Object.entries(pairs));
+  return { toLocal, toRepo: new Map([...toLocal].map(([r, l]) => [l, r])) };
 }
 
 describe('gitBlobSha', () => {
@@ -95,6 +108,23 @@ describe('scanAgents', () => {
     expect(result.fresh.size).toBe(0);
   });
 
+  it('renames a mapped first-level folder to its repository name', async () => {
+    const dir = await mkTmp();
+    await fs.mkdir(path.join(dir, 'D--code-api', 'sess1', 'subagents'), { recursive: true });
+    await fs.writeFile(path.join(dir, 'D--code-api', 'sess1.jsonl'), 'hello\n');
+    await fs.writeFile(path.join(dir, 'D--code-api', 'sess1', 'subagents', 'a1.jsonl'), 'x\n');
+    await fs.mkdir(path.join(dir, 'other-proj'), { recursive: true });
+    await fs.writeFile(path.join(dir, 'other-proj', 'sess2.jsonl'), 'y\n');
+
+    const map = folderMap({ 'C--work-api': 'D--code-api' });
+    const result = await scanAgents([agent('claude', 'claude', dir, map)]);
+    expect(Object.keys(result.files).sort()).toEqual([
+      'claude/C--work-api/sess1.jsonl',
+      'claude/C--work-api/sess1/subagents/a1.jsonl',
+      'claude/other-proj/sess2.jsonl', // unmapped folders keep their name
+    ]);
+  });
+
   it('skips oversized files entirely', async () => {
     const dir = await mkTmp();
     await fs.mkdir(path.join(dir, 'proj'), { recursive: true });
@@ -133,6 +163,18 @@ describe('repo path safety', () => {
     expect(repoPathToLocal(agents, 'codex/proj/sess.jsonl')).toBeUndefined(); // unknown agent
   });
 
+  it('applies the folder map when resolving repo paths to local paths', () => {
+    const claudeDir = path.join(os.tmpdir(), 'claude-projects');
+    const agents = [agent('claude', 'claude', claudeDir, folderMap({ 'C--work-api': 'D--code-api' }))];
+    expect(repoPathToLocal(agents, 'claude/C--work-api/sess.jsonl')).toBe(
+      path.join(claudeDir, 'D--code-api', 'sess.jsonl')
+    );
+    expect(repoPathToLocalRel(agents, 'claude/C--work-api/sess.jsonl')).toBe('D--code-api/sess.jsonl');
+    // unmapped folders resolve unchanged
+    expect(repoPathToLocal(agents, 'claude/other/sess.jsonl')).toBe(path.join(claudeDir, 'other', 'sess.jsonl'));
+    expect(repoPathToLocalRel(agents, 'claude/other/sess.jsonl')).toBe('other/sess.jsonl');
+  });
+
   it('describes a unit with its agent label', () => {
     const agents = [
       { id: 'claude', label: 'Claude Code', repoDir: 'claude', localPath: '/x', unitDepth: 3 },
@@ -147,5 +189,50 @@ describe('repo path safety', () => {
   it('expands ~ in user paths', () => {
     expect(expandUserPath('~/custom/projects')).toBe(path.join(os.homedir(), 'custom', 'projects'));
     expect(expandUserPath('~')).toBe(os.homedir());
+  });
+});
+
+describe('claude project folder mapping', () => {
+  it('derives the folder name Claude Code uses for a project path', () => {
+    expect(claudeProjectSlug('C:\\work\\api')).toBe('C--work-api');
+    expect(claudeProjectSlug('/home/alice/dev/api')).toBe('-home-alice-dev-api');
+    // real-world vector: path with spaces and dashes
+    expect(claudeProjectSlug('f:\\-PROJECTS-\\VSCode - Agent Session Sync')).toBe(
+      'f---PROJECTS--VSCode---Agent-Session-Sync'
+    );
+  });
+
+  const projectDir = path.join(os.tmpdir(), 'code', 'api'); // absolute → survives expandUserPath
+  const localSlug = claudeProjectSlug(projectDir);
+
+  it('builds both directions from repo-folder → local-project-path entries', () => {
+    const map = buildFolderMap({ 'C--work-api': projectDir }, []);
+    expect(map?.toLocal.get('C--work-api')).toBe(localSlug);
+    expect(map?.toRepo.get(localSlug)).toBe('C--work-api');
+  });
+
+  it('normalizes the local folder name to the on-disk casing', () => {
+    const onDisk = localSlug.toLowerCase() === localSlug ? localSlug.toUpperCase() : localSlug.toLowerCase();
+    const map = buildFolderMap({ 'C--work-api': projectDir }, [onDisk]);
+    expect(map?.toLocal.get('C--work-api')).toBe(onDisk);
+    expect(map?.toRepo.get(onDisk)).toBe('C--work-api');
+  });
+
+  it('keeps an entry inactive while a local folder with the repository name exists', () => {
+    expect(buildFolderMap({ 'C--work-api': projectDir }, ['C--work-api'])).toBeUndefined();
+    expect(buildFolderMap({ 'C--work-api': projectDir }, ['c--work-API'])).toBeUndefined(); // case-insensitive
+  });
+
+  it('drops identity, unsafe and duplicate entries', () => {
+    // identity: the project produces the repository name already
+    expect(buildFolderMap({ [localSlug]: projectDir }, [])).toBeUndefined();
+    // unsafe repository folder names never enter the map
+    expect(buildFolderMap({ '..': projectDir }, [])).toBeUndefined();
+    expect(buildFolderMap({ 'a/b': projectDir }, [])).toBeUndefined();
+    expect(buildFolderMap({ 'C--work-api': '   ' }, [])).toBeUndefined();
+    // two repository folders must not claim the same local folder
+    const map = buildFolderMap({ 'C--work-api': projectDir, 'E--other-api': projectDir }, []);
+    expect(map?.toLocal.get('C--work-api')).toBe(localSlug);
+    expect(map?.toLocal.has('E--other-api')).toBe(false);
   });
 });

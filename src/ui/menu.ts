@@ -50,6 +50,11 @@ export async function openMenu(
       action: () => vscode.commands.executeCommand('agentSessionsSync.openRepository') as Promise<void>,
     });
     items.push({
+      label: '$(file-symlink-directory) Map Claude Project Folder…',
+      detail: "Make another machine's sessions appear in 'claude --resume' here.",
+      action: () => vscode.commands.executeCommand('agentSessionsSync.mapClaudeProject') as Promise<void>,
+    });
+    items.push({
       label: '$(plug) Change Repository…',
       action: () => vscode.commands.executeCommand('agentSessionsSync.setup') as Promise<void>,
     });

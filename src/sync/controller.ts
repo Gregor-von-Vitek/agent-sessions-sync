@@ -5,7 +5,7 @@ import * as vscode from 'vscode';
 import { getGitHubSession } from '../github/auth';
 import { GitHubClient, GitHubError, TreeEntry } from '../github/client';
 import { forEachLimit } from '../util/async';
-import { describeUnit, isValidRepoPath, makeUnitOf, repoPathToLocal, UnitFn } from '../util/paths';
+import { describeUnit, isValidRepoPath, makeUnitOf, repoPathToLocal, repoPathToLocalRel, UnitFn } from '../util/paths';
 import { repoReadmeContent } from '../util/repoTemplate';
 import { computeSyncPlan, countUnits, mapsEqual } from './engine';
 import { ScanOptions, scanAgents } from './scanner';
@@ -95,8 +95,9 @@ export class SyncController implements vscode.Disposable {
     const files: TrashFile[] = [];
     for (const p of repoPaths) {
       const absPath = repoPathToLocal(agents, p);
-      if (absPath) {
-        files.push({ absPath, relPath: p.split('/').slice(1).join('/') });
+      const relPath = repoPathToLocalRel(agents, p);
+      if (absPath && relPath) {
+        files.push({ absPath, relPath });
       }
     }
     return files;
@@ -166,6 +167,33 @@ export class SyncController implements vscode.Disposable {
       remote = await this.fetchRemoteFiles(client, cfg, treeSha);
     }
     return { localUnits: countUnits(scan.files, unitFn), remoteUnits: countUnits(remote, unitFn) };
+  }
+
+  /** Distinct first-level folder names under one agent namespace in the repository (for the project-mapping UI). */
+  async listRemoteFolders(repoDir: string): Promise<string[]> {
+    const cfg = this.getConfig();
+    if (!cfg) {
+      throw new Error('Not configured');
+    }
+    const session = await getGitHubSession(false);
+    if (!session) {
+      throw new Error('GitHub sign-in required');
+    }
+    const client = this.createClient(session.accessToken, cfg);
+    const headSha = await client.getBranchHeadSha(cfg.owner, cfg.repo, cfg.branch);
+    if (!headSha) {
+      return [];
+    }
+    const { treeSha } = await client.getCommit(cfg.owner, cfg.repo, headSha);
+    const files = await this.fetchRemoteFiles(client, cfg, treeSha);
+    const folders = new Set<string>();
+    for (const p of Object.keys(files)) {
+      const [dir, folder, ...rest] = p.split('/');
+      if (dir === repoDir && folder && rest.length > 0) {
+        folders.add(folder);
+      }
+    }
+    return [...folders].sort();
   }
 
   /** Entry point for the scheduler. Never throws; failures end up in the status + log. */

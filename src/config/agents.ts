@@ -1,6 +1,7 @@
+import * as fs from 'node:fs';
 import * as vscode from 'vscode';
-import { Agent } from '../sync/types';
-import { expandUserPath } from '../util/paths';
+import { Agent, FolderMap } from '../sync/types';
+import { buildFolderMap, expandUserPath } from '../util/paths';
 
 interface KnownAgent {
   id: string;
@@ -38,13 +39,30 @@ export function getEnabledAgents(): Agent[] {
       continue;
     }
     const configured = (cfg.get<string>(`agents.${known.id}.path`, '') ?? '').trim();
+    const localPath = expandUserPath(configured || known.defaultPath);
     agents.push({
       id: known.id,
       label: known.label,
       repoDir: known.repoDir,
-      localPath: expandUserPath(configured || known.defaultPath),
+      localPath,
       unitDepth: known.unitDepth,
+      folderMap: known.id === 'claude' ? claudeFolderMap(cfg, localPath) : undefined,
     });
   }
   return agents;
+}
+
+/** The claude agent's project-folder renaming from the `projectPaths` setting (see paths.ts). */
+function claudeFolderMap(cfg: vscode.WorkspaceConfiguration, localPath: string): FolderMap | undefined {
+  const entries = cfg.get<Record<string, string>>('agents.claude.projectPaths', {}) ?? {};
+  if (Object.keys(entries).length === 0) {
+    return undefined;
+  }
+  let localFolders: string[] = [];
+  try {
+    localFolders = fs.readdirSync(localPath);
+  } catch {
+    // missing sessions dir — no local folders to normalize or collide with
+  }
+  return buildFolderMap(entries, localFolders);
 }

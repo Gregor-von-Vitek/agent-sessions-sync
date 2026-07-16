@@ -37,8 +37,8 @@ export interface ScanResult {
   oversized: Set<string>;
 }
 
-/** Recursively scan one directory, adding `<repoDir>/<rel>` entries to `result`. */
-async function scanDir(rootDir: string, repoDir: string, result: ScanResult, options: ScanOptions): Promise<void> {
+/** Recursively scan one agent directory, adding `<repoDir>/<rel>` entries to `result`. */
+async function scanDir(agent: Agent, result: ScanResult, options: ScanOptions): Promise<void> {
   async function walk(absDir: string, rel: string): Promise<void> {
     let entries;
     try {
@@ -64,7 +64,7 @@ async function scanDir(rootDir: string, repoDir: string, result: ScanResult, opt
         if (isIgnoredFileName(entry.name)) {
           continue;
         }
-        const repoPath = localRelToRepoPath(repoDir, childRel);
+        const repoPath = localRelToRepoPath(agent.repoDir, childRel, agent.folderMap?.toRepo);
         const stat = await fs.stat(childAbs);
         if (options.maxFileSize !== undefined && stat.size > options.maxFileSize) {
           result.oversized.add(repoPath);
@@ -81,7 +81,7 @@ async function scanDir(rootDir: string, repoDir: string, result: ScanResult, opt
       }
     }
   }
-  await walk(rootDir, '');
+  await walk(agent.localPath, '');
 }
 
 /**
@@ -91,7 +91,7 @@ async function scanDir(rootDir: string, repoDir: string, result: ScanResult, opt
 export async function scanAgents(agents: readonly Agent[], options: ScanOptions = {}): Promise<ScanResult> {
   const result: ScanResult = { files: {}, fresh: new Set(), oversized: new Set() };
   for (const agent of agents) {
-    await scanDir(agent.localPath, agent.repoDir, result, options);
+    await scanDir(agent, result, options);
   }
   return result;
 }

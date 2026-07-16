@@ -2,6 +2,19 @@
 export type FileShaMap = Record<string, string>;
 
 /**
+ * Renames an agent's first-level folders between the local and the repository layout.
+ * Used to remap Claude Code's absolute-path project folders across machines: the repository
+ * keeps one canonical folder name per project, each machine translates it to the folder name
+ * its own project path produces. Folders without an entry keep their name (identity).
+ */
+export interface FolderMap {
+  /** Repository folder name → local folder name. */
+  toLocal: ReadonlyMap<string, string>;
+  /** Local folder name → repository folder name (inverse of `toLocal`). */
+  toRepo: ReadonlyMap<string, string>;
+}
+
+/**
  * A synchronized AI agent. Each agent maps one local sessions directory to one top-level
  * namespace (`repoDir`) in the repository, so multiple agents share one repo without collisions.
  */
@@ -21,6 +34,8 @@ export interface Agent {
    * (`<id>.jsonl` + `<id>/subagents/…`) fold into a single unit.
    */
   unitDepth: number;
+  /** Optional first-level folder renaming between local and repository layout. */
+  folderMap?: FolderMap;
 }
 
 /** The GitHub repository + branch the user selected during setup. */

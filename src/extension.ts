@@ -8,6 +8,7 @@ import { Trash } from './sync/trash';
 import { Agent, RepoConfig } from './sync/types';
 import { RemoteContentProvider, REMOTE_SCHEME, resolveConflictsFlow } from './ui/conflicts';
 import { openMenu } from './ui/menu';
+import { mapClaudeProjectFlow } from './ui/projectMap';
 import { runSetupWizard } from './ui/setupWizard';
 import { StatusBar } from './ui/statusBar';
 
@@ -141,6 +142,9 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
     vscode.commands.registerCommand('agentSessionsSync.resolveConflicts', () =>
       resolveConflictsFlow(controller, getAgents, (reason) => scheduler.requestSync(reason))
+    ),
+    vscode.commands.registerCommand('agentSessionsSync.mapClaudeProject', () =>
+      mapClaudeProjectFlow(controller, getConfig, getAgents, log)
     ),
     vscode.commands.registerCommand('agentSessionsSync.openRepository', () => {
       const cfg = getConfig();

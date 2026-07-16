@@ -44,6 +44,17 @@ Each is toggled + repointed via settings `agentSessionsSync.agents.<id>.{enabled
 - The engine receives `unitOf` as a parameter (`makeUnitOf(agents)`), it does not import a
   fixed one.
 - A missing agent directory contributes nothing (scanner returns nothing for it).
+- **Folder mapping** (`Agent.folderMap`, claude only): the `agents.claude.projectPaths`
+  setting (machine-scoped: repo folder name → local project dir) renames an agent's
+  *first-level* folders between the repo and local layouts, so a project living at different
+  absolute paths per machine still syncs into the slug folder `claude --resume` reads.
+  Built by `buildFolderMap` (`src/util/paths.ts`): local names case-normalized to on-disk
+  casing; an entry stays **inactive while a local folder with the repo name exists** (else
+  scan reads the old folder while downloads write the new one — worst case the engine would
+  see mass local deletions). The `mapClaudeProject` command (`src/ui/projectMap.ts`) creates
+  mappings and migrates the old folder away. Everything between the two boundaries
+  (engine, BASE, conflicts, frozen sets) stays in repo-path space; translation happens only
+  in the scanner (local→repo) and `repoPathToLocal`/`repoPathToLocalRel` (repo→local).
 
 ## Architecture
 
@@ -58,7 +69,8 @@ Data flows one direction per module; UI never touches GitHub directly.
   skipped entirely.
 - `src/config/agents.ts` — builds the enabled `Agent[]` from settings (`getEnabledAgents`).
 - `src/util/paths.ts` — `unitOf(path, depth)`, `makeUnitOf`, `localRelToRepoPath`,
-  `repoPathToLocal(agents,…)`, `isValidRepoPath(repoDirs,…)`, `describeUnit`, `expandUserPath`.
+  `repoPathToLocal(agents,…)`, `repoPathToLocalRel`, `isValidRepoPath(repoDirs,…)`,
+  `describeUnit`, `expandUserPath`, `claudeProjectSlug`, `buildFolderMap`.
 - `src/sync/stateStore.ts` — BASE (last-synced) state as JSON in `globalStorage`; keyed by
   repo+branch, never committed to the repo.
 - `src/sync/trash.ts` — file-list based backup + Undo before local delete/overwrite
@@ -74,7 +86,10 @@ Data flows one direction per module; UI never touches GitHub directly.
 - `src/github/{auth,client}.ts` — VS Code built-in GitHub auth (`repo` scope) +
   dependency-free REST client over global `fetch` (Git Data API).
 - `src/ui/*` — status bar, setup wizard (warns on public repos — transcripts are sensitive),
-  conflict resolution (native `vscode.diff`), quick menu.
+  conflict resolution (native `vscode.diff`), quick menu, project-folder mapping
+  (`projectMap.ts`: picks a repo folder via `controller.listRemoteFolders`, migrates the
+  old local folder, writes the setting — in that order, so a mid-flow sync never sees a
+  half-active mapping).
 - `src/extension.ts` — activation (`onStartupFinished`), command registration, wiring.
 
 ## Invariants (do not break)
@@ -95,8 +110,8 @@ Data flows one direction per module; UI never touches GitHub directly.
 
 - Unit tests cover the full decision table in `engine.ts` plus frozen-unit semantics and
   per-agent unit depths (`test/unit/engine.test.ts`), and the scanner (fresh/oversized) +
-  hash + path-safety (`test/unit/scanner.test.ts`). Add a table row or a mapping rule → add
-  a test.
+  hash + path-safety + folder mapping (slug vectors, `buildFolderMap` rules, mapped scans)
+  (`test/unit/scanner.test.ts`). Add a table row or a mapping rule → add a test.
 - `gitBlobSha` is verified against known `git hash-object` vectors.
 
 ## Windows gotchas (integration test)
@@ -131,8 +146,9 @@ These are environment/tooling constraints, not extension bugs.
 
 ## Session-specific caveats / future work
 
-- Claude Code project-slug dirs encode absolute project paths → synced sessions surface in
-  `claude --resume` on another machine only when paths match; otherwise it's a backup.
+- Claude Code project-slug dirs encode absolute project paths. Solved by the folder mapping
+  above (`projectPaths` setting + Map Claude Project Folder command); without a mapping a
+  differing path still degrades gracefully to a backup-only folder.
 - Agents' own cleanup (e.g. Claude Code `cleanupPeriodDays`) propagates as deletions —
   guarded by trash + mass-delete confirmation + repo git history.
 - The repo grows without bound (git history keeps every blob version). Possible future work:
