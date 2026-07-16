@@ -2,7 +2,7 @@
   "name": "agent-sessions-sync",
   "displayName": "Agent Sessions Sync",
   "description": "Keep your AI agent sessions (Claude Code, Codex, Cursor) synchronized across all of your computers via your own private GitHub repository.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "Gregor-von-Vitek",
   "license": "MIT",
   "icon": "media/icon.png",

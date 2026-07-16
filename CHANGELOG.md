@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.0
+
+- **Claude Code project folder mapping** — sessions synced from a machine where the project
+  lives at a different absolute path can now show up in `claude --resume`. New command
+  **Map Claude Project Folder** picks a project folder from the repository, points it at the
+  project's directory on this machine, and moves already-downloaded sessions into place.
+  Backed by the new per-machine setting `agentSessionsSync.agents.claude.projectPaths`.
+- The status-bar quick menu gained a "Map Claude Project Folder…" entry.
+- README rewritten as a user-facing guide.
+
 ## 0.1.0
 
 Initial release.
